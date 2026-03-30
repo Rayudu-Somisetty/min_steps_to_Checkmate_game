@@ -13,20 +13,17 @@
 <body>
   <main class="app-shell">
     <section class="left-panel">
+      <p class="eyebrow">5x5 Variant</p>
       <h1>Minimum Moves to Checkmate</h1>
       <p class="subtitle">Find the fastest forced mate. You play the attacking side, the defender responds with best resistance.</p>
 
       <div class="status-card">
         <div class="row"><span>Puzzle</span><strong id="puzzleTitle">-</strong></div>
-        <div class="row"><span>Difficulty</span><strong id="difficultyLabel">Easy</strong></div>
         <div class="row"><span>Target</span><strong id="targetMate">-</strong></div>
         <div class="row"><span>Your Moves</span><strong id="userMoves">0</strong></div>
-        <div class="row"><span>Timer</span><strong id="timer">00:00</strong></div>
-        <div class="row"><span>White Clock</span><strong id="whiteClock">05:00</strong></div>
-        <div class="row"><span>Black Clock</span><strong id="blackClock">05:00</strong></div>
       </div>
 
-      <div class="difficulty-wrap">
+      <div class="difficulty-wrap" style="display: none;">
         <label for="difficultySelect">Difficulty</label>
         <select id="difficultySelect">
           <option value="easy" selected>Easy (Mate in 1-3)</option>
@@ -36,14 +33,14 @@
 
       <div class="custom-wrap" id="customWrap">
         <div id="customPiecesPanel" class="custom-pieces-panel">
-          <p>Your side pieces (opponent has only king):</p>
+          <p>Your pieces (Attacker):</p>
           <div class="custom-pieces-grid">
-            <label><input type="checkbox" data-piece="p" checked> Soldier (Pawn)</label>
-            <label><input type="checkbox" data-piece="r" checked> Rook</label>
-            <label><input type="checkbox" data-piece="n" checked> Horse (Knight)</label>
-            <label><input type="checkbox" data-piece="b" checked> Bishop</label>
-            <label><input type="checkbox" data-piece="q" checked> Queen</label>
-            <label><input type="checkbox" data-piece="k" checked disabled> King (required)</label>
+            <div class="piece-btn" data-piece="p"><span>+ Pawn</span></div>
+            <div class="piece-btn" data-piece="r"><span>+ Rook</span></div>
+            <div class="piece-btn" data-piece="n"><span>+ Knight</span></div>
+            <div class="piece-btn" data-piece="b"><span>+ Bishop</span></div>
+            <div class="piece-btn" data-piece="q"><span>+ Queen</span></div>
+            <div class="piece-btn selected" data-piece="k" disabled><span>King</span></div>
           </div>
         </div>
       </div>
@@ -59,8 +56,10 @@
     </section>
 
     <section class="board-panel">
-      <div id="board" class="board"></div>
-      <p class="board-note">Drag and drop pieces. Only legal moves are accepted.</p>
+      <div class="board-viewport">
+        <div id="board" class="board"></div>
+      </div>
+      <p class="board-note">Drag and drop pieces on the 5x5 board. Only legal moves are accepted.</p>
     </section>
   </main>
 

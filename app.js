@@ -1,5 +1,17 @@
 const START_FEN = "start";
 const INITIAL_CLOCK_SECONDS = 5 * 60;
+const MINI_BOARD_FILES = "abcde";
+const MINI_BOARD_MIN_RANK = 1;
+const MINI_BOARD_MAX_RANK = 5;
+const MINI_BOARD_SQUARES = (() => {
+  const squares = [];
+  for (const file of MINI_BOARD_FILES) {
+    for (let rank = MINI_BOARD_MIN_RANK; rank <= MINI_BOARD_MAX_RANK; rank += 1) {
+      squares.push(`${file}${rank}`);
+    }
+  }
+  return squares;
+})();
 
 let board;
 let game;
@@ -28,7 +40,8 @@ const resultEl = document.getElementById("result");
 const difficultySelectEl = document.getElementById("difficultySelect");
 const customWrapEl = document.getElementById("customWrap");
 const customPiecesPanelEl = document.getElementById("customPiecesPanel");
-const customPieceCheckboxes = Array.from(document.querySelectorAll("#customPiecesPanel input[data-piece]"));
+const customPieceCheckboxes = Array.from(document.querySelectorAll("#customPiecesPanel .piece-btn"));
+
 const newPuzzleBtnEl = document.getElementById("newPuzzleBtn");
 const hintBtnEl = document.getElementById("hintBtn");
 const resetBtnEl = document.getElementById("resetBtn");
@@ -50,8 +63,8 @@ function formatTime(totalSeconds) {
 }
 
 function updateClockUI() {
-  whiteClockEl.textContent = formatTime(clockSeconds.w);
-  blackClockEl.textContent = formatTime(clockSeconds.b);
+  if (whiteClockEl) whiteClockEl.textContent = formatTime(clockSeconds.w);
+  if (blackClockEl) blackClockEl.textContent = formatTime(clockSeconds.b);
 }
 
 function isCheckmate(chess) {
@@ -80,10 +93,10 @@ function stopAllTimers() {
 function startElapsedTimer() {
   clearInterval(elapsedTimerId);
   elapsedSeconds = 0;
-  timerEl.textContent = formatTime(elapsedSeconds);
+  if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
   elapsedTimerId = setInterval(() => {
     elapsedSeconds += 1;
-    timerEl.textContent = formatTime(elapsedSeconds);
+    if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
   }, 1000);
 }
 
@@ -112,29 +125,70 @@ function updateModeUI() {
 }
 
 function updateStatusFields() {
-  puzzleTitleEl.textContent = activePuzzle ? activePuzzle.title : "-";
-  difficultyLabelEl.textContent = currentDifficulty === "hard" ? "Hard" : "Easy";
-  targetMateEl.textContent = activePuzzle
+  if (puzzleTitleEl) puzzleTitleEl.textContent = activePuzzle ? activePuzzle.title : "-";
+  if (difficultyLabelEl) difficultyLabelEl.textContent = currentDifficulty === "hard" ? "Hard" : "Easy";
+  if (targetMateEl) targetMateEl.textContent = activePuzzle
     ? (activePuzzle.mateIn ? `Mate in ${activePuzzle.mateIn}` : "-")
     : "-";
-  userMovesEl.textContent = `${attackerMoveCount}`;
+  if (userMovesEl) userMovesEl.textContent = `${attackerMoveCount}`;
 }
 
 function selectedCustomPieces() {
   return customPieceCheckboxes
-    .filter((checkbox) => checkbox.checked)
-    .map((checkbox) => checkbox.getAttribute("data-piece"));
+    .filter((btn) => btn.classList.contains("selected"))
+    .map((btn) => btn.getAttribute("data-piece"));
+}
+
+
+
+function squareRank(square) {
+  return Number(square.slice(1));
+}
+
+function isSquareOnMiniBoard(square) {
+  if (typeof square !== "string" || square.length < 2) return false;
+  const file = square[0];
+  const rank = squareRank(square);
+  return MINI_BOARD_FILES.includes(file)
+    && Number.isInteger(rank)
+    && rank >= MINI_BOARD_MIN_RANK
+    && rank <= MINI_BOARD_MAX_RANK;
+}
+
+function moveOnMiniBoard(move) {
+  return isSquareOnMiniBoard(move.from) && isSquareOnMiniBoard(move.to);
+}
+
+function legalMovesWithinMiniBoard(chess) {
+  return chess.moves({ verbose: true }).filter(moveOnMiniBoard);
+}
+
+function miniBoardTerminalState(chess) {
+  const moves = legalMovesWithinMiniBoard(chess);
+  if (moves.length > 0) {
+    return { kind: "none", legalMoves: moves };
+  }
+
+  if (isCheck(chess)) {
+    return { kind: "checkmate", legalMoves: moves };
+  }
+
+  return { kind: "draw", legalMoves: moves };
 }
 
 function randomSquare(usedSquares, avoidPawnEdges = false) {
-  const files = "abcdefgh";
-  for (let tries = 0; tries < 150; tries += 1) {
-    const file = files[Math.floor(Math.random() * files.length)];
-    const rank = 1 + Math.floor(Math.random() * 8);
-    if (avoidPawnEdges && (rank === 1 || rank === 8)) continue;
-    const square = `${file}${rank}`;
-    if (!usedSquares.has(square)) return square;
+  const choices = MINI_BOARD_SQUARES.filter((square) => {
+    if (usedSquares.has(square)) return false;
+    if (!avoidPawnEdges) return true;
+    const rank = squareRank(square);
+    return rank !== MINI_BOARD_MIN_RANK && rank !== MINI_BOARD_MAX_RANK;
+  });
+
+  if (choices.length > 0) {
+    const randomIndex = Math.floor(Math.random() * choices.length);
+    return choices[randomIndex];
   }
+
   return null;
 }
 
@@ -156,8 +210,9 @@ function setPuzzleGenerationUI(disabled) {
   resetBtnEl.disabled = disabled;
   hintBtnEl.disabled = disabled;
   difficultySelectEl.disabled = disabled;
-  for (const checkbox of customPieceCheckboxes) {
-    checkbox.disabled = disabled || checkbox.getAttribute("data-piece") === "k";
+  for (const btn of customPieceCheckboxes) {
+    btn.style.pointerEvents = disabled ? "none" : "auto";
+    btn.style.opacity = disabled ? "0.5" : "1";
   }
 }
 
@@ -178,6 +233,8 @@ function createCustomPuzzleAsync(requestToken) {
       return;
     }
 
+
+
     if (typeof MateSolver === "undefined" || typeof MateSolver.findExactMateDistance !== "function") {
       setMessage("Mate solver is not available. Reload the page and try again.", "bad");
       resolve(null);
@@ -191,11 +248,19 @@ function createCustomPuzzleAsync(requestToken) {
     const maxAttempts = 240;
     const chunkSize = 6;
     let attempt = 0;
+    let lastMessageTime = 0;
 
     function tryChunk() {
       if (requestToken !== puzzleGenerationToken) {
         resolve(null);
         return;
+      }
+
+      // Update message every 30 attempts to show progress
+      if (attempt % 30 === 0 && Date.now() - lastMessageTime > 500) {
+        lastMessageTime = Date.now();
+        const progress = Math.min(Math.round((attempt / maxAttempts) * 100), 99);
+        setMessage(`Finding checkmate position... (${progress}%)`, "info");
       }
 
       for (let step = 0; step < chunkSize && attempt < maxAttempts; step += 1) {
@@ -234,11 +299,13 @@ function createCustomPuzzleAsync(requestToken) {
         }
         if (!placedAll) continue;
 
-        const legalMoves = testGame.moves({ verbose: true });
-        if (legalMoves.length === 0) continue;
-        if (isCheckmate(testGame) || isDraw(testGame)) continue;
+        const terminal = miniBoardTerminalState(testGame);
+        if (terminal.kind !== "none") continue;
 
-        const solved = MateSolver.findExactMateDistance(testGame, limits.maxMate, "w", { timeLimitMs: 90 });
+        const solved = MateSolver.findExactMateDistance(testGame, limits.maxMate, "w", {
+          timeLimitMs: 90,
+          moveFilter: moveOnMiniBoard
+        });
         if (solved.timedOut) continue;
         if (!solved.solved || solved.mateIn < limits.minMate || solved.mateIn > limits.maxMate) continue;
 
@@ -253,7 +320,8 @@ function createCustomPuzzleAsync(requestToken) {
       }
 
       if (attempt >= maxAttempts) {
-        resolve(null);
+        // Puzzle generation failed - suggest better piece combinations
+        resolve({ failed: true, suggestion: "Try adding more attacking pieces or changing piece combinations." });
         return;
       }
 
@@ -275,10 +343,11 @@ function pieceValue(type) {
 }
 
 function evaluatePosition(chess, color) {
-  if (isCheckmate(chess)) {
+  const terminal = miniBoardTerminalState(chess);
+  if (terminal.kind === "checkmate" || isCheckmate(chess)) {
     return chess.turn() === color ? -999999 : 999999;
   }
-  if (isDraw(chess)) return 0;
+  if (terminal.kind === "draw" || isDraw(chess)) return 0;
 
   const boardState = chess.board();
   let score = 0;
@@ -298,11 +367,12 @@ function evaluatePosition(chess, color) {
 }
 
 function minimax(chess, depth, alpha, beta, maximizing, aiSide) {
-  if (depth === 0 || isCheckmate(chess) || isDraw(chess)) {
+  const terminal = miniBoardTerminalState(chess);
+  if (depth === 0 || terminal.kind !== "none" || isCheckmate(chess) || isDraw(chess)) {
     return evaluatePosition(chess, aiSide);
   }
 
-  const moves = chess.moves({ verbose: true });
+  const moves = terminal.legalMoves;
   if (moves.length === 0) {
     return evaluatePosition(chess, aiSide);
   }
@@ -335,7 +405,7 @@ function aiDepth() {
 }
 
 function bestMoveFor(chess, side, depth) {
-  const moves = chess.moves({ verbose: true });
+  const moves = legalMovesWithinMiniBoard(chess);
   if (moves.length === 0) return null;
 
   let bestMove = moves[0];
@@ -360,7 +430,8 @@ function renderResult(summary, efficiencyText = "") {
 }
 
 function finalizeGameIfNeeded() {
-  if (isCheckmate(game)) {
+  const terminal = miniBoardTerminalState(game);
+  if (terminal.kind === "checkmate" || isCheckmate(game)) {
     stopAllTimers();
 
     const success = game.turn() === defenderColor;
@@ -379,7 +450,7 @@ function finalizeGameIfNeeded() {
     return true;
   }
 
-  if (isDraw(game)) {
+  if (terminal.kind === "draw" || isDraw(game)) {
     stopAllTimers();
     setMessage("Draw reached.", "warn");
     renderResult("Puzzle failed by draw.");
@@ -455,16 +526,21 @@ function loadPuzzle(puzzle = null) {
   setPuzzleGenerationUI(true);
   setMessage("Generating exact puzzle...", "info");
 
-  createCustomPuzzleAsync(requestToken).then((generatedPuzzle) => {
+  createCustomPuzzleAsync(requestToken).then((result) => {
     if (requestToken !== puzzleGenerationToken) return;
 
     setPuzzleGenerationUI(false);
-    if (!generatedPuzzle) {
+    if (!result) {
       setMessage("Could not create custom puzzle. Try fewer pieces or try again.", "bad");
       return;
     }
 
-    applyPuzzle(generatedPuzzle);
+    if (result.failed) {
+      setMessage(`No checkmate found. ${result.suggestion}`, "bad");
+      return;
+    }
+
+    applyPuzzle(result);
   });
 }
 
@@ -476,19 +552,25 @@ function resetCurrent() {
   loadPuzzle(activePuzzle);
 }
 
-function onDragStart(_source, piece) {
-  if (isGeneratingPuzzle || !game || isCheckmate(game) || isDraw(game)) return false;
+function onDragStart(source, piece) {
+  if (isGeneratingPuzzle || !game || miniBoardTerminalState(game).kind !== "none" || isCheckmate(game) || isDraw(game)) return false;
 
   if (game.turn() !== attackerColor) return false;
   if (piece[0] !== attackerColor) return false;
+  if (!isSquareOnMiniBoard(source)) return false;
   return true;
 }
 
 function onDrop(source, target) {
   if (!game) return "snapback";
+  if (!isSquareOnMiniBoard(source) || !isSquareOnMiniBoard(target)) return "snapback";
 
   const move = game.move({ from: source, to: target, promotion: "q" });
   if (move === null) return "snapback";
+  if (!moveOnMiniBoard(move)) {
+    game.undo();
+    return "snapback";
+  }
 
   attackerMoveCount += 1;
 
@@ -505,19 +587,54 @@ function onSnapEnd() {
   if (board && game) board.position(game.fen());
 }
 
+function moveToUci(move) {
+  if (!move) return "";
+  return `${move.from}${move.to}${move.promotion || ""}`;
+}
+
+function findSolverHintMove(chess, side) {
+  if (typeof MateSolver === "undefined" || typeof MateSolver.findExactMateDistance !== "function") {
+    return null;
+  }
+
+  const maxMoves = currentDifficulty === "hard" ? 6 : 3;
+  const solved = MateSolver.findExactMateDistance(chess, maxMoves, side, {
+    timeLimitMs: 150,
+    moveFilter: moveOnMiniBoard
+  });
+
+  if (!solved.solved || solved.principalVariation.length === 0) {
+    return null;
+  }
+
+  const pvFirst = solved.principalVariation[0];
+  const legalMoves = legalMovesWithinMiniBoard(chess);
+  const exactSan = legalMoves.find((move) => move.san === pvFirst);
+  if (exactSan) return exactSan;
+
+  const normalizedPv = pvFirst.replace(/[+#]?[?!]*$/g, "");
+  return legalMoves.find((move) => move.san.replace(/[+#]?[?!]*$/g, "") === normalizedPv) || null;
+}
+
 function showHint() {
-  if (!game || game.turn() !== attackerColor) {
+  if (!game || game.turn() !== attackerColor || isGeneratingPuzzle) {
     setMessage("Hint is available on your turn.", "warn");
     return;
   }
 
-  const move = bestMoveFor(game, attackerColor, aiDepth());
+  const terminal = miniBoardTerminalState(game);
+  if (terminal.kind !== "none") {
+    setMessage("This position is already finished.", "warn");
+    return;
+  }
+
+  const move = findSolverHintMove(game, attackerColor) || bestMoveFor(game, attackerColor, aiDepth());
   if (!move) {
     setMessage("No hint available from this position.", "warn");
     return;
   }
 
-  setMessage(`Hint: consider ${move.san}.`, "info");
+  setMessage(`Hint: try ${move.san} (${moveToUci(move)}).`, "info");
 }
 
 function startAccordingToMode() {
@@ -541,8 +658,10 @@ difficultySelectEl.addEventListener("change", (event) => {
   startAccordingToMode();
 });
 
-for (const checkbox of customPieceCheckboxes) {
-  checkbox.addEventListener("change", () => {
+for (const btn of customPieceCheckboxes) {
+  btn.addEventListener("click", () => {
+    if (btn.getAttribute("data-piece") === "k" || btn.hasAttribute("disabled")) return;
+    btn.classList.toggle("selected");
     loadPuzzle();
   });
 }

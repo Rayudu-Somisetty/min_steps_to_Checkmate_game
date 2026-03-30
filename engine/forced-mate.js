@@ -13,26 +13,32 @@
     return false;
   }
 
+  function isCheck(chess) {
+    if (typeof chess.isCheck === "function") return chess.isCheck();
+    if (typeof chess.in_check === "function") return chess.in_check();
+    return false;
+  }
+
+  function legalMoves(chess, options) {
+    const moves = chess.moves({ verbose: true });
+    if (typeof options.moveFilter === "function") {
+      return moves.filter((move) => options.moveFilter(move, chess));
+    }
+    return moves;
+  }
+
   function fenKey(chess) {
     const fen = chess.fen();
     const parts = fen.split(" ");
     return `${parts[0]} ${parts[1]} ${parts[2]} ${parts[3]}`;
   }
 
-  function verifyForcedMate(chess, plyRemaining, attackerColor, stats, memo, deadlineTs) {
+  function verifyForcedMate(chess, plyRemaining, attackerColor, stats, memo, deadlineTs, options) {
     if (deadlineTs && Date.now() > deadlineTs) {
       return { ok: false, pv: [], timedOut: true };
     }
 
     stats.nodesExpanded += 1;
-
-    if (isCheckmate(chess)) {
-      return {
-        ok: chess.turn() !== attackerColor,
-        pv: [],
-        timedOut: false
-      };
-    }
 
     if (isDraw(chess) || plyRemaining < 0) {
       return {
@@ -47,10 +53,11 @@
       return memo.get(key);
     }
 
-    const moves = chess.moves({ verbose: true });
+    const moves = legalMoves(chess, options);
     if (moves.length === 0) {
+      const checkmated = isCheckmate(chess) || isCheck(chess);
       const noMoveResult = {
-        ok: false,
+        ok: checkmated && chess.turn() !== attackerColor,
         pv: [],
         timedOut: false
       };
@@ -63,7 +70,7 @@
     if (sideToMove === attackerColor) {
       for (const move of moves) {
         chess.move(move);
-        const child = verifyForcedMate(chess, plyRemaining - 1, attackerColor, stats, memo, deadlineTs);
+        const child = verifyForcedMate(chess, plyRemaining - 1, attackerColor, stats, memo, deadlineTs, options);
         chess.undo();
 
         if (child.timedOut) {
@@ -90,7 +97,7 @@
     let selectedDefenderLine = null;
     for (const move of moves) {
       chess.move(move);
-      const child = verifyForcedMate(chess, plyRemaining - 1, attackerColor, stats, memo, deadlineTs);
+      const child = verifyForcedMate(chess, plyRemaining - 1, attackerColor, stats, memo, deadlineTs, options);
       chess.undo();
 
       if (child.timedOut) {
@@ -127,7 +134,7 @@
     const memo = new Map();
     const deadlineTs = options.deadlineTs || (options.timeLimitMs ? Date.now() + options.timeLimitMs : 0);
 
-    const result = verifyForcedMate(chess, plyLimit, attackerColor, stats, memo, deadlineTs);
+    const result = verifyForcedMate(chess, plyLimit, attackerColor, stats, memo, deadlineTs, options);
     return {
       canForce: Boolean(result.ok),
       principalVariation: result.pv,
@@ -147,7 +154,10 @@
     let timedOut = false;
 
     for (let n = 1; n <= maxAttackerMoves; n += 1) {
-      const attempt = canForceMateIn(chess, n, attackerColor, { deadlineTs: deadlineTs });
+      const attempt = canForceMateIn(chess, n, attackerColor, {
+        deadlineTs: deadlineTs,
+        moveFilter: options.moveFilter
+      });
       totalNodes += attempt.nodesExpanded;
       if (attempt.timedOut) {
         timedOut = true;
