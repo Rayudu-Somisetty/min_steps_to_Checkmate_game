@@ -8,7 +8,7 @@
   --card: rgba(255, 255, 255, 0.78);
   --border: rgba(31, 31, 36, 0.14);
   --shadow-soft: 0 12px 32px rgba(20, 20, 30, 0.12);
-  --board-size: clamp(280px, 30vw, 350px);
+  --board-size: clamp(320px, 36vw, 440px);
 }
 
 * {
@@ -24,16 +24,16 @@ body {
     radial-gradient(circle at 5% 10%, rgba(187, 62, 3, 0.2) 0%, rgba(187, 62, 3, 0) 38%),
     radial-gradient(circle at 92% 16%, rgba(0, 95, 115, 0.2) 0%, rgba(0, 95, 115, 0) 42%),
     linear-gradient(135deg, var(--bg) 0%, var(--bg-alt) 100%);
-  padding: 10px;
+  padding: clamp(10px, 1.8vw, 24px);
 }
 
 .app-shell {
-  width: min(1160px, 100%);
-  min-height: calc(100vh - 20px);
+  width: min(1320px, 98vw);
+  min-height: calc(100vh - clamp(20px, 3.6vw, 48px));
   margin-inline: auto;
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 14px;
+  grid-template-columns: minmax(420px, 1.08fr) minmax(360px, 1fr);
+  gap: clamp(12px, 1.8vw, 24px);
   align-items: stretch;
 }
 
@@ -47,7 +47,7 @@ body {
 }
 
 .left-panel {
-  padding: 14px;
+  padding: clamp(14px, 1.6vw, 20px);
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-areas:
@@ -176,6 +176,11 @@ button:focus-visible {
   min-width: 0;
 }
 
+.actions button {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .custom-wrap {
   margin-top: 0;
   border: 1px solid rgba(31, 31, 36, 0.14);
@@ -291,7 +296,7 @@ button:active {
 }
 
 .board-panel {
-  padding: 14px;
+  padding: clamp(14px, 1.6vw, 20px);
   display: grid;
   place-items: center;
   align-content: center;
@@ -345,6 +350,15 @@ button:active {
 }
 
 @media (max-width: 1120px) {
+  :root {
+    --board-size: clamp(300px, 46vw, 380px);
+  }
+
+  .app-shell {
+    width: min(1180px, 98vw);
+    grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  }
+
   .custom-pieces-grid {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
@@ -359,6 +373,7 @@ button:active {
     min-height: auto;
     grid-template-columns: 1fr;
     gap: 12px;
+    width: min(760px, 100%);
   }
 
   .board-panel {
@@ -388,6 +403,6 @@ button:active {
   }
 
   .board-viewport {
-    width: min(350px, 100%);
+    width: min(430px, 88vw);
   }
 }

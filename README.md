@@ -1,99 +1,81 @@
-# Minimum Steps to Checkmate Chess Puzzle Game
+# Minimum Steps to Checkmate (5x5 Variant)
 
-A chess puzzle game that generates custom checkmate puzzles with AI opponent. Features advanced algorithms for exact mate verification and optimal defense.
+Interactive chess puzzle game where you play the attacking side and try to force checkmate in the fewest moves.
 
-## Features
+This project uses a 5x5 board viewport with legal-move filtering, exact mate validation, and an AI defender.
 
-- **Puzzle Mode**: Solve generated checkmate puzzles with custom piece selection
-- **Difficulty Levels**: 
-  - Easy: Checkmate in 1-3 moves
-  - Hard: Checkmate in 4-6 moves
-- **Custom Piece Selection**: Choose which attacking pieces (pawns, rooks, knights, bishops, queens) to include
-- **AI Defense**: Opponent plays optimal defense using minimax algorithm
-- **Exact Mate Verification**: Puzzles are validated to guarantee forced checkmate
-- **Move Efficiency**: Track how your solution compares to optimal
-- **Timers**: Elapsed time and chess clocks for both sides
-- **Hint System**: Suggests best attacking moves
-- **Responsive Design**: Works on desktop and tablet
+## Live Idea
 
-## Algorithms Implemented
+- Generate random custom puzzles based on selected attacker pieces.
+- Guarantee that each accepted puzzle has a forced mate.
+- Let the defender reply with best practical resistance.
 
-### 1. Forced-Mate Solver (Iterative Deepening DFS)
-**File**: `engine/forced-mate.js`
-- **Purpose**: Verifies exact mate distance during puzzle generation
-- **Method**: 
-  - Tries mate-in-1, then mate-in-2, incrementally up to mate-in-6
-  - Uses minimax-style OR/AND node logic (attacker seeks winning move, defender plays best defense)
-  - Memoization with FEN-based transposition table to avoid recomputing positions
-  - Timeout support (90ms per puzzle) prevents UI blocking
-- **Returns**: Exact mate depth, principal variation, nodes expanded, runtime
+## Current Features
 
-### 2. Minimax with Alpha-Beta Pruning
-**File**: `app.js` (functions: `minimax`, `bestMoveFor`)
-- **Purpose**: Generate AI defender's best-response moves during puzzle play
-- **Search Depth**: 
-  - Easy mode: 2 levels deep
-  - Hard mode: 3 levels deep
-- **Evaluation Function**: 
-  - Material count (Pawn=100, Knight=320, Bishop=330, Rook=500, Queen=900, King=20000)
-  - Check status bonus (+30 for checking side, -30 for checked side)
-  - Checkmate/Draw terminal evaluation
-- **Pruning**: Alpha-beta pruning eliminates futile branches
+- 5x5 variant board (cropped from standard board rendering)
+- Custom attacker piece selection using + buttons
+- King always included by default
+- Puzzle generation with exact mate verification
+- Hint system based on forced-mate principal variation
+- Defender AI powered by minimax with alpha-beta pruning
+- Puzzle reset and instant new puzzle generation
+- Responsive layout for desktop and mobile screens
 
-### 3. Position Evaluation
-**File**: `app.js` (function: `evaluatePosition`)
-- Counts material for both sides
-- Applies check bonus based on game state
-- Returns quantified score for minimax comparison
+## Rules and Behavior
 
-### 4. Puzzle Generation (Async Chunked)
-**File**: `app.js` (function: `createCustomPuzzleAsync`)
-- Non-blocking position generation via `setTimeout` chunking
-- Random square placement with conflict/edge avoidance
-- King adjacency validation
-- Solver verification before accepting puzzle
-- Limit: 3 attacking pieces max (computational efficiency)
-- Timeout cancellation support via request tokens
+- You always play the attacking side.
+- Only moves that stay on the 5x5 board are allowed.
+- The puzzle is successful only when you deliver checkmate.
+- If no valid forced-mate puzzle is found for your selected pieces, the game shows a suggestion message.
 
-## How to Play
+## Tech Stack
 
-1. Select difficulty level (Easy or Hard)
-2. Check the piece types you want in puzzles
-3. Click "New Puzzle" to generate a custom puzzle
-4. Drag pieces to make moves
-5. Try to checkmate the defending AI in minimum moves
-6. Use "Hint" for suggested moves or "Reset" to replay the same puzzle
+- HTML, CSS, Vanilla JavaScript
+- chess.js for chess rules and move legality
+- chessboard.js for board UI
+- Custom forced-mate solver in `engine/forced-mate.js`
 
-## File Structure
+## Core Algorithms
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `index.html` | 88 | Page layout, controls, board container |
-| `app.js` | 748 | Puzzle flow, UI, minimax AI, async generation |
-| `engine/forced-mate.js` | 170 | Exact mate solver with iterative deepening |
-| `styles.css` | 290 | Responsive design, gradients, animations |
-| `vendor/chess.min.js` | - | Chess rules engine & move validation |
-| `vendor/chessboard-1.0.0.min.js` | - | Interactive board UI |
-| `vendor/chessboard-1.0.0.min.css` | - | Board styling |
-| `vendor/jquery.min.js` | - | Required by chessboard.js |
+### 1. Forced-mate verification
 
-## Technical Details
+- File: `engine/forced-mate.js`
+- Iterative deepening search checks if a forced mate exists within target depth.
+- Uses memoization on FEN-derived keys.
+- Supports time-limited solving during generation and hints.
 
-**Puzzle Generation Flow:**
-1. User selects pieces and clicks "New Puzzle"
-2. Async generator creates random positions with selected pieces
-3. Each position checked with forced-mate solver (90ms timeout)
-4. Only positions with exact mate in [1-3] or [4-6] accepted
-5. Position becomes active puzzle
+### 2. Defender move selection
 
-**Game Play Flow:**
-1. Position loaded with attacker (white) to move
-2. Player makes attacking moves (can drag pieces)
-3. After each attacker move, AI defender responds with minimax best move
-4. Game ends when checkmate or draw detected
-5. Efficiency calculated: (optimal_moves / actual_moves) * 100%
+- File: `app.js`
+- Minimax + alpha-beta pruning for defender responses.
+- Material-based evaluation with check/checkmate terminal handling.
 
-**Performance:**
-- Puzzle generation: ~1-3 seconds per puzzle
-- AI move response: <200ms (minimax depth 2-3)
-- No UI blocking due to async chunking
+### 3. Async puzzle generation
+
+- File: `app.js`
+- Chunked generation loop (`setTimeout`) keeps UI responsive.
+- Enforces piece placement constraints and king adjacency rules.
+- Accepts only positions that solver confirms as forced mate.
+
+## Project Structure
+
+- `index.html`: main UI markup
+- `styles.css`: visual design and responsive layout
+- `app.js`: game flow, generation, hints, AI moves
+- `engine/forced-mate.js`: exact mate solver
+- `vendor/`: third-party chess and board libraries
+
+## Run Locally
+
+1. Clone the repository.
+2. Open the project folder in VS Code.
+3. Start a static server (for example, VS Code Live Server).
+4. Open `index.html` in the browser.
+
+## Deploy on GitHub Pages
+
+1. Push all project files to your GitHub repository root (or configured docs folder).
+2. In repository settings, enable GitHub Pages and select the correct branch/folder.
+3. Wait for deployment to complete, then open the generated Pages URL.
+
+If styling looks stale after deployment, hard-refresh the page to clear cached CSS/JS.
