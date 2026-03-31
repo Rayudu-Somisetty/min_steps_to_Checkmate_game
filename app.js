@@ -258,7 +258,12 @@ function miniBoardTerminalState(chess) {
     return { kind: "none", legalMoves: moves };
   }
 
-  if (isMiniBoardInCheck(chess, chess.turn())) {
+  // Checkmate = King is in check AND has no legal moves to escape
+  // Check if current side to move's king is in check
+  const sideToMove = chess.turn();
+  const isInCheck = isMiniBoardInCheck(chess, sideToMove);
+  
+  if (isInCheck) {
     return { kind: "checkmate", legalMoves: moves };
   }
 
@@ -495,7 +500,12 @@ function aiDepth() {
 }
 
 function bestMoveFor(chess, side, depth) {
-  const moves = legalMovesWithinMiniBoard(chess);
+  const moves = legalMovesWithinMiniBoard(chess)
+    .filter(move => {
+      // Exclude any moves that would capture the opponent's king (illegal in chess)
+      const piece = chess.get(move.to);
+      return !(piece && piece.type === "k");
+    });
   if (moves.length === 0) return null;
 
   let bestMove = moves[0];
@@ -654,6 +664,14 @@ function onDragStart(source, piece) {
 function onDrop(source, target) {
   if (!game) return "snapback";
   if (!isSquareOnMiniBoard(source) || !isSquareOnMiniBoard(target)) return "snapback";
+
+  // Check if target square has opponent's king - illegal move in real chess
+  const targetPiece = game.get(target);
+  if (targetPiece && targetPiece.type === "k") {
+    // Cannot capture the king - this is not a legal chess move
+    setMessage("Illegal move: cannot capture the king. Checkmate occurs when the king is in check with no escape.", "warn");
+    return "snapback";
+  }
 
   const move = game.move({ from: source, to: target, promotion: "q" });
   if (move === null) return "snapback";

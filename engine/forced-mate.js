@@ -20,7 +20,14 @@
   }
 
   function legalMoves(chess, options) {
-    const moves = chess.moves({ verbose: true });
+    let moves = chess.moves({ verbose: true });
+    
+    // Filter out any moves that would capture the opponent's king (illegal in chess)
+    moves = moves.filter(move => {
+      const piece = chess.get(move.to);
+      return !(piece && piece.type === "k");
+    });
+    
     if (typeof options.moveFilter === "function") {
       return moves.filter((move) => options.moveFilter(move, chess));
     }
