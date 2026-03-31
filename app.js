@@ -145,6 +145,21 @@ function squareRank(square) {
   return Number(square.slice(1));
 }
 
+function squareFileIndex(square) {
+  return square.charCodeAt(0) - 97;
+}
+
+function coordsToSquare(fileIndex, rank) {
+  return `${String.fromCharCode(97 + fileIndex)}${rank}`;
+}
+
+function isMiniCoords(fileIndex, rank) {
+  return fileIndex >= 0
+    && fileIndex < MINI_BOARD_FILES.length
+    && rank >= MINI_BOARD_MIN_RANK
+    && rank <= MINI_BOARD_MAX_RANK;
+}
+
 function isSquareOnMiniBoard(square) {
   if (typeof square !== "string" || square.length < 2) return false;
   const file = square[0];
@@ -163,13 +178,87 @@ function legalMovesWithinMiniBoard(chess) {
   return chess.moves({ verbose: true }).filter(moveOnMiniBoard);
 }
 
+function isMiniSquareAttackedBy(chess, targetSquare, attackerColor) {
+  const targetFile = squareFileIndex(targetSquare);
+  const targetRank = squareRank(targetSquare);
+
+  for (const from of MINI_BOARD_SQUARES) {
+    const piece = chess.get(from);
+    if (!piece || piece.color !== attackerColor) continue;
+
+    const fromFile = squareFileIndex(from);
+    const fromRank = squareRank(from);
+    const fileDiff = targetFile - fromFile;
+    const rankDiff = targetRank - fromRank;
+
+    if (piece.type === "p") {
+      const dir = piece.color === "w" ? 1 : -1;
+      if (rankDiff === dir && Math.abs(fileDiff) === 1) return true;
+      continue;
+    }
+
+    if (piece.type === "n") {
+      const isKnightHop = (Math.abs(fileDiff) === 1 && Math.abs(rankDiff) === 2)
+        || (Math.abs(fileDiff) === 2 && Math.abs(rankDiff) === 1);
+      if (isKnightHop) return true;
+      continue;
+    }
+
+    if (piece.type === "k") {
+      if (Math.max(Math.abs(fileDiff), Math.abs(rankDiff)) === 1) return true;
+      continue;
+    }
+
+    const canSlideDiag = piece.type === "b" || piece.type === "q";
+    const canSlideStraight = piece.type === "r" || piece.type === "q";
+
+    const diagonalMatch = Math.abs(fileDiff) === Math.abs(rankDiff) && fileDiff !== 0;
+    const straightMatch = (fileDiff === 0 && rankDiff !== 0) || (rankDiff === 0 && fileDiff !== 0);
+
+    if ((diagonalMatch && canSlideDiag) || (straightMatch && canSlideStraight)) {
+      const stepFile = fileDiff === 0 ? 0 : (fileDiff > 0 ? 1 : -1);
+      const stepRank = rankDiff === 0 ? 0 : (rankDiff > 0 ? 1 : -1);
+
+      let currentFile = fromFile + stepFile;
+      let currentRank = fromRank + stepRank;
+
+      while (isMiniCoords(currentFile, currentRank)) {
+        const currentSquare = coordsToSquare(currentFile, currentRank);
+        if (currentSquare === targetSquare) return true;
+        if (chess.get(currentSquare)) break;
+        currentFile += stepFile;
+        currentRank += stepRank;
+      }
+    }
+  }
+
+  return false;
+}
+
+function findMiniBoardKingSquare(chess, color) {
+  for (const square of MINI_BOARD_SQUARES) {
+    const piece = chess.get(square);
+    if (piece && piece.type === "k" && piece.color === color) {
+      return square;
+    }
+  }
+  return null;
+}
+
+function isMiniBoardInCheck(chess, color = chess.turn()) {
+  const kingSquare = findMiniBoardKingSquare(chess, color);
+  if (!kingSquare) return false;
+  const attacker = color === "w" ? "b" : "w";
+  return isMiniSquareAttackedBy(chess, kingSquare, attacker);
+}
+
 function miniBoardTerminalState(chess) {
   const moves = legalMovesWithinMiniBoard(chess);
   if (moves.length > 0) {
     return { kind: "none", legalMoves: moves };
   }
 
-  if (isCheck(chess)) {
+  if (isMiniBoardInCheck(chess, chess.turn())) {
     return { kind: "checkmate", legalMoves: moves };
   }
 
@@ -304,7 +393,8 @@ function createCustomPuzzleAsync(requestToken) {
 
         const solved = MateSolver.findExactMateDistance(testGame, limits.maxMate, "w", {
           timeLimitMs: 90,
-          moveFilter: moveOnMiniBoard
+          moveFilter: moveOnMiniBoard,
+          isInCheck: (searchChess, sideToCheck) => isMiniBoardInCheck(searchChess, sideToCheck)
         });
         if (solved.timedOut) continue;
         if (!solved.solved || solved.mateIn < limits.minMate || solved.mateIn > limits.maxMate) continue;
@@ -436,7 +526,7 @@ function finalizeGameIfNeeded() {
 
     const success = game.turn() === defenderColor;
     if (success) {
-      setMessage("Checkmate found.", "good");
+      setMessage("Checkmate found on the 5x5 board.", "good");
       if (optimalMoves) {
         const efficiency = Math.min((optimalMoves / Math.max(attackerMoveCount, 1)) * 100, 100).toFixed(1);
         renderResult(`Solved in ${attackerMoveCount} move(s).`, `Optimal: ${optimalMoves}. Efficiency: ${efficiency}%.`);
@@ -600,7 +690,8 @@ function findSolverHintMove(chess, side) {
   const maxMoves = currentDifficulty === "hard" ? 6 : 3;
   const solved = MateSolver.findExactMateDistance(chess, maxMoves, side, {
     timeLimitMs: 150,
-    moveFilter: moveOnMiniBoard
+    moveFilter: moveOnMiniBoard,
+    isInCheck: (searchChess, sideToCheck) => isMiniBoardInCheck(searchChess, sideToCheck)
   });
 
   if (!solved.solved || solved.principalVariation.length === 0) {

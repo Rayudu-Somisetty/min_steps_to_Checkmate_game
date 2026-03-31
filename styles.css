@@ -332,7 +332,9 @@ button:active {
 }
 
 .board {
-  width: calc(var(--board-size) * 8 / 5);
+  width: 160% !important;
+  height: 160% !important;
+  max-width: none !important;
   position: absolute;
   left: 0;
   bottom: 0;

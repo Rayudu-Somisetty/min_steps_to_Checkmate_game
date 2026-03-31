@@ -27,6 +27,13 @@
     return moves;
   }
 
+  function inCheck(chess, options) {
+    if (typeof options.isInCheck === "function") {
+      return options.isInCheck(chess, chess.turn());
+    }
+    return isCheck(chess);
+  }
+
   function fenKey(chess) {
     const fen = chess.fen();
     const parts = fen.split(" ");
@@ -55,7 +62,7 @@
 
     const moves = legalMoves(chess, options);
     if (moves.length === 0) {
-      const checkmated = isCheckmate(chess) || isCheck(chess);
+      const checkmated = isCheckmate(chess) || inCheck(chess, options);
       const noMoveResult = {
         ok: checkmated && chess.turn() !== attackerColor,
         pv: [],
