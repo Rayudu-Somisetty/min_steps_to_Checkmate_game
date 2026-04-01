@@ -1,5 +1,8 @@
 const START_FEN = "start";
 const INITIAL_CLOCK_SECONDS = 5 * 60;
+const MAX_PUZZLE_SCORE = 1000;
+const EXTRA_MOVE_PENALTY = 100;
+const HINT_PENALTY = 100;
 const MINI_BOARD_FILES = "abcde";
 const MINI_BOARD_MIN_RANK = 1;
 const MINI_BOARD_MAX_RANK = 5;
@@ -21,6 +24,7 @@ let attackerColor = "w";
 let defenderColor = "b";
 let attackerMoveCount = 0;
 let optimalMoves = null;
+let hintsUsed = 0;
 let elapsedSeconds = 0;
 let elapsedTimerId = null;
 let clockIntervalId = null;
@@ -32,6 +36,7 @@ const puzzleTitleEl = document.getElementById("puzzleTitle");
 const difficultyLabelEl = document.getElementById("difficultyLabel");
 const targetMateEl = document.getElementById("targetMate");
 const userMovesEl = document.getElementById("userMoves");
+const scoreEl = document.getElementById("score");
 const timerEl = document.getElementById("timer");
 const whiteClockEl = document.getElementById("whiteClock");
 const blackClockEl = document.getElementById("blackClock");
@@ -113,6 +118,7 @@ function startClocks() {
       clearInterval(clockIntervalId);
       setMessage(`${side === "w" ? "White" : "Black"} lost on time.`, "bad");
       resultEl.innerHTML = `Time's up.`;
+      if (scoreEl) scoreEl.textContent = "0";
     }
   }, 1000);
 }
@@ -131,6 +137,14 @@ function updateStatusFields() {
     ? (activePuzzle.mateIn ? `Mate in ${activePuzzle.mateIn}` : "-")
     : "-";
   if (userMovesEl) userMovesEl.textContent = `${attackerMoveCount}`;
+  if (scoreEl) scoreEl.textContent = `${calculateCurrentScore()}`;
+}
+
+function calculateCurrentScore() {
+  const safeOptimal = Math.max(Number(optimalMoves) || 0, 1);
+  const extraMoves = Math.max(attackerMoveCount - safeOptimal, 0);
+  const penalties = (extraMoves * EXTRA_MOVE_PENALTY) + (hintsUsed * HINT_PENALTY);
+  return Math.max(MAX_PUZZLE_SCORE - penalties, 0);
 }
 
 function selectedCustomPieces() {
@@ -525,8 +539,8 @@ function bestMoveFor(chess, side, depth) {
   return bestMove;
 }
 
-function renderResult(summary, efficiencyText = "") {
-  resultEl.innerHTML = efficiencyText ? `${summary}<br>${efficiencyText}` : summary;
+function renderResult(summary, detailsText = "") {
+  resultEl.innerHTML = detailsText ? `${summary}<br>${detailsText}` : summary;
 }
 
 function finalizeGameIfNeeded() {
@@ -537,15 +551,19 @@ function finalizeGameIfNeeded() {
     const success = game.turn() === defenderColor;
     if (success) {
       setMessage("Checkmate found on the 5x5 board.", "good");
+      const finalScore = calculateCurrentScore();
       if (optimalMoves) {
-        const efficiency = Math.min((optimalMoves / Math.max(attackerMoveCount, 1)) * 100, 100).toFixed(1);
-        renderResult(`Solved in ${attackerMoveCount} move(s).`, `Optimal: ${optimalMoves}. Efficiency: ${efficiency}%.`);
+        renderResult(
+          `Solved in ${attackerMoveCount} move(s).`,
+          `Optimal: ${optimalMoves}. Hints used: ${hintsUsed}. Score: ${finalScore}/1000.`
+        );
       } else {
-        renderResult(`Solved in ${attackerMoveCount} move(s).`);
+        renderResult(`Solved in ${attackerMoveCount} move(s).`, `Hints used: ${hintsUsed}. Score: ${finalScore}/1000.`);
       }
     } else {
       setMessage("Your king was checkmated.", "bad");
       renderResult("Puzzle failed.");
+      if (scoreEl) scoreEl.textContent = "0";
     }
     return true;
   }
@@ -554,6 +572,7 @@ function finalizeGameIfNeeded() {
     stopAllTimers();
     setMessage("Draw reached.", "warn");
     renderResult("Puzzle failed by draw.");
+    if (scoreEl) scoreEl.textContent = "0";
     return true;
   }
 
@@ -590,6 +609,7 @@ function applyPuzzle(puzzle) {
   defenderColor = attackerColor === "w" ? "b" : "w";
   attackerMoveCount = 0;
   optimalMoves = puzzle.mateIn;
+  hintsUsed = 0;
   clearResult();
 
   clockSeconds = { w: INITIAL_CLOCK_SECONDS, b: INITIAL_CLOCK_SECONDS };
@@ -743,6 +763,8 @@ function showHint() {
     return;
   }
 
+  hintsUsed += 1;
+  updateStatusFields();
   setMessage(`Hint: try ${move.san} (${moveToUci(move)}).`, "info");
 }
 

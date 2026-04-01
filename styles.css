@@ -347,10 +347,6 @@ button:active {
   font-size: 0.95rem;
 }
 
-.efficiency {
-  font-weight: 700;
-}
-
 @media (max-width: 1120px) {
   :root {
     --board-size: clamp(300px, 46vw, 380px);
