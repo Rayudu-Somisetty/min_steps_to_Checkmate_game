@@ -347,6 +347,57 @@ button:active {
   font-size: 0.95rem;
 }
 
+/* Custom highlighting for possible moves */
+.square-55d63.highlight1-32417 {
+  position: relative;
+}
+
+.square-55d63.highlight1-32417::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.square-55d63.highlight2-9c5d2::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10;
+  animation: capturePulse 2s ease-in-out infinite;
+}
+
+/* King in check highlighting */
+.square-55d63.king-in-check {
+  background-color: rgba(255, 0, 0, 0.8) !important;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5) !important;
+}
+
+@keyframes capturePulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.8;
+  }
+}
+
 @media (max-width: 1120px) {
   :root {
     --board-size: clamp(300px, 46vw, 380px);

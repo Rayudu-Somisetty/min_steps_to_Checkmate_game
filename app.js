@@ -90,6 +90,15 @@ function isCheck(chess) {
   return false;
 }
 
+function isColorInCheck(chess, color) {
+  // Create a temporary game state with the specified color's turn
+  const tempGame = new Chess(chess.fen());
+  const fenParts = tempGame.fen().split(' ');
+  fenParts[1] = color;
+  tempGame.load(fenParts.join(' '));
+  return isCheck(tempGame);
+}
+
 function stopAllTimers() {
   clearInterval(elapsedTimerId);
   clearInterval(clockIntervalId);
@@ -182,6 +191,16 @@ function isSquareOnMiniBoard(square) {
     && Number.isInteger(rank)
     && rank >= MINI_BOARD_MIN_RANK
     && rank <= MINI_BOARD_MAX_RANK;
+}
+
+function isSquareOnFullBoard(square) {
+  if (typeof square !== "string" || square.length < 2) return false;
+  const file = square[0];
+  const rank = squareRank(square);
+  return 'abcdefgh'.includes(file)
+    && Number.isInteger(rank)
+    && rank >= 1
+    && rank <= 8;
 }
 
 function moveOnMiniBoard(move) {
@@ -349,6 +368,7 @@ function createCustomPuzzleAsync(requestToken) {
       return;
     }
 
+    // Ensure minimum mate is at least 1 (not 0)
     const limits = currentDifficulty === "hard"
       ? { minMate: 4, maxMate: 6 }
       : { minMate: 1, maxMate: 3 };
@@ -407,6 +427,10 @@ function createCustomPuzzleAsync(requestToken) {
         }
         if (!placedAll) continue;
 
+        // Ensure white is not in check at the start
+        if (isMiniBoardInCheck(testGame, "w")) continue;
+
+        // Skip if already checkmate or draw
         const terminal = miniBoardTerminalState(testGame);
         if (terminal.kind !== "none") continue;
 
@@ -416,7 +440,8 @@ function createCustomPuzzleAsync(requestToken) {
           isInCheck: (searchChess, sideToCheck) => isMiniBoardInCheck(searchChess, sideToCheck)
         });
         if (solved.timedOut) continue;
-        if (!solved.solved || solved.mateIn < limits.minMate || solved.mateIn > limits.maxMate) continue;
+        // Only accept if mateIn is at least 1 (not 0), and not already checkmate
+        if (!solved.solved || solved.mateIn < limits.minMate || solved.mateIn > limits.maxMate || solved.mateIn === 0) continue;
 
         resolve({
           id: `custom-${Date.now()}`,
@@ -568,7 +593,7 @@ function finalizeGameIfNeeded() {
     return true;
   }
 
-  if (terminal.kind === "draw" || isDraw(game)) {
+  if (terminal.kind === "draw") {
     stopAllTimers();
     setMessage("Draw reached.", "warn");
     renderResult("Puzzle failed by draw.");
@@ -585,6 +610,9 @@ function makeAIMove() {
   const side = game.turn();
   if (side !== defenderColor) return;
 
+  // Show thinking message during delay
+  setMessage("Defender is thinking...", "info");
+
   setTimeout(() => {
     if (finalizeGameIfNeeded()) return;
 
@@ -596,10 +624,12 @@ function makeAIMove() {
 
     game.move(move);
     board.position(game.fen(), false);
+    removeHighlights();
+    updateCheckHighlighting();
     setMessage(`Defender plays ${move.san}.`, "info");
     updateStatusFields();
     finalizeGameIfNeeded();
-  }, 180);
+  }, 3000);
 }
 
 function applyPuzzle(puzzle) {
@@ -627,10 +657,21 @@ function applyPuzzle(puzzle) {
       onDragStart,
       onDrop,
       onSnapEnd,
+      onMouseoverSquare,
+      onMouseoutSquare,
       pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png"
     });
+    updateCheckHighlighting();
   } else {
     board.position(game.fen());
+    removeHighlights();
+    updateCheckHighlighting();
+  }
+
+  // Update board note based on difficulty
+  const boardNoteEl = document.querySelector('.board-note');
+  if (boardNoteEl) {
+    boardNoteEl.textContent = currentDifficulty === "hard" ? "Drag and drop pieces on the 8x8 board. Only legal moves are accepted." : "Drag and drop pieces on the 5x5 board. Only legal moves are accepted.";
   }
 }
 
@@ -678,6 +719,17 @@ function onDragStart(source, piece) {
   if (game.turn() !== attackerColor) return false;
   if (piece[0] !== attackerColor) return false;
   if (!isSquareOnMiniBoard(source)) return false;
+
+  // Highlight possible moves when dragging starts
+  const moves = game.moves({ verbose: true }).filter(move => move.from === source && moveOnMiniBoard(move));
+  moves.forEach(move => {
+    const isCapture = move.captured !== undefined;
+    highlightSquare(move.to, isCapture);
+  });
+
+  // Ensure check highlighting is maintained
+  updateCheckHighlighting();
+
   return true;
 }
 
@@ -703,6 +755,8 @@ function onDrop(source, target) {
   attackerMoveCount += 1;
 
   board.position(game.fen(), false);
+  removeHighlights();
+  updateCheckHighlighting();
   updateStatusFields();
 
   if (finalizeGameIfNeeded()) return undefined;
@@ -713,6 +767,67 @@ function onDrop(source, target) {
 
 function onSnapEnd() {
   if (board && game) board.position(game.fen());
+  removeHighlights();
+  updateCheckHighlighting();
+}
+
+function onMouseoverSquare(square, piece) {
+  // Remove any existing highlights
+  removeHighlights();
+
+  if (!game || !piece || game.turn() !== attackerColor || piece[0] !== attackerColor || isGeneratingPuzzle) return;
+
+  // Get all possible moves for this piece
+  const moves = game.moves({ verbose: true }).filter(move => move.from === square && moveOnMiniBoard(move));
+  
+  // Highlight the target squares
+  moves.forEach(move => {
+    const isCapture = move.captured !== undefined;
+    highlightSquare(move.to, isCapture);
+  });
+
+  // Re-apply check highlighting
+  updateCheckHighlighting();
+}
+
+function onMouseoutSquare(square, piece) {
+  removeHighlights();
+  updateCheckHighlighting();
+}
+
+function highlightSquare(square, isCapture = false) {
+  const $square = $(`.square-55d63[data-square="${square}"]`);
+  const highlightClass = isCapture ? 'highlight2-9c5d2' : 'highlight1-32417';
+  $square.addClass(highlightClass);
+}
+
+function removeHighlights() {
+  $('.square-55d63').removeClass('highlight1-32417 highlight2-9c5d2 king-in-check');
+}
+
+function updateCheckHighlighting() {
+  if (!game) return;
+
+  // Remove existing check highlighting
+  $('.square-55d63').removeClass('king-in-check');
+
+  // Check if white is in check
+  if (isColorInCheck(game, 'w')) {
+    const whiteKingSquare = findMiniBoardKingSquare(game, 'w');
+    if (whiteKingSquare) {
+      const $kingSquare = $(`.square-55d63[data-square="${whiteKingSquare}"]`);
+      $kingSquare.addClass('king-in-check');
+    }
+  }
+
+  // Check if black is in check
+  if (isColorInCheck(game, 'b')) {
+    const blackKingSquare = findMiniBoardKingSquare(game, 'b');
+    if (blackKingSquare) {
+      const $kingSquare = $(`.square-55d63[data-square="${blackKingSquare}"]`);
+      $kingSquare.addClass('king-in-check');
+    }
+  }
 }
 
 function moveToUci(move) {
@@ -785,7 +900,29 @@ hintBtnEl.addEventListener("click", showHint);
 resetBtnEl.addEventListener("click", resetCurrent);
 
 difficultySelectEl.addEventListener("change", (event) => {
-  currentDifficulty = event.target.value === "hard" ? "hard" : "easy";
+  currentDifficulty = event.target.value;
+  if (currentDifficulty === "hard") {
+    customWrapEl.style.display = "none";
+    // Select all pieces for hard
+    customPieceCheckboxes.forEach(btn => {
+      if (btn.getAttribute("data-piece") !== "k") {
+        btn.classList.add("selected");
+      }
+    });
+  } else {
+    customWrapEl.style.display = "block";
+    // For easy/medium, deselect all except king
+    customPieceCheckboxes.forEach(btn => {
+      if (btn.getAttribute("data-piece") !== "k") {
+        btn.classList.remove("selected");
+      }
+    });
+  }
+  if (currentDifficulty === "medium") {
+    hintBtnEl.disabled = true;
+  } else {
+    hintBtnEl.disabled = false;
+  }
   startAccordingToMode();
 });
 
