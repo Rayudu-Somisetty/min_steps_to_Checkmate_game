@@ -315,7 +315,7 @@ button:active {
 }
 
 .board-viewport::before {
-  content: "5x5 Tactical Board";
+  content: attr(data-board-label);
   position: absolute;
   z-index: 3;
   left: 8px;
@@ -332,12 +332,17 @@ button:active {
 }
 
 .board {
-  width: 160% !important;
-  height: 160% !important;
+  width: 100% !important;
+  height: 100% !important;
   max-width: none !important;
   position: absolute;
   left: 0;
   bottom: 0;
+}
+
+.board-viewport.board-5x5 .board {
+  width: 160% !important;
+  height: 160% !important;
 }
 
 .board-note {

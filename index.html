@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minimum Moves to Checkmate</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='50' font-size='50'%3E%E2%99%9F%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Spectral:wght@500;700&display=swap" rel="stylesheet">
@@ -13,7 +14,7 @@
 <body>
   <main class="app-shell">
     <section class="left-panel">
-      <p class="eyebrow">5x5 Variant</p>
+      <p class="eyebrow" id="variantBadge">5x5 Variant</p>
       <h1>Minimum Moves to Checkmate</h1>
       <p class="subtitle">Find the fastest forced mate. You play the attacking side, the defender responds with best resistance.</p>
 
@@ -28,8 +29,7 @@
         <label for="difficultySelect">Difficulty</label>
         <select id="difficultySelect">
           <option value="easy" selected>Easy (5x5 with hints)</option>
-          <option value="medium">Medium (5x5 no hints)</option>
-          <option value="hard">Hard (8x8 full board)</option>
+          <option value="hard">Hard (8x8 random pieces)</option>
         </select>
       </div>
 
@@ -58,7 +58,7 @@
     </section>
 
     <section class="board-panel">
-      <div class="board-viewport">
+      <div class="board-viewport board-5x5" id="boardViewport" data-board-label="5x5 Tactical Board">
         <div id="board" class="board"></div>
       </div>
       <p class="board-note">Drag and drop pieces on the 5x5 board. Only legal moves are accepted.</p>

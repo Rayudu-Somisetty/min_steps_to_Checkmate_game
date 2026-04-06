@@ -6,10 +6,30 @@ const HINT_PENALTY = 100;
 const MINI_BOARD_FILES = "abcde";
 const MINI_BOARD_MIN_RANK = 1;
 const MINI_BOARD_MAX_RANK = 5;
+const ATTACKER_RANDOM_POOL = ["p", "r", "n", "b", "q"];
+const PIECE_LABELS = {
+  p: "Pawn",
+  r: "Rook",
+  n: "Knight",
+  b: "Bishop",
+  q: "Queen"
+};
 const MINI_BOARD_SQUARES = (() => {
   const squares = [];
   for (const file of MINI_BOARD_FILES) {
     for (let rank = MINI_BOARD_MIN_RANK; rank <= MINI_BOARD_MAX_RANK; rank += 1) {
+      squares.push(`${file}${rank}`);
+    }
+  }
+  return squares;
+})();
+const FULL_BOARD_FILES = "abcdefgh";
+const FULL_BOARD_MIN_RANK = 1;
+const FULL_BOARD_MAX_RANK = 8;
+const FULL_BOARD_SQUARES = (() => {
+  const squares = [];
+  for (const file of FULL_BOARD_FILES) {
+    for (let rank = FULL_BOARD_MIN_RANK; rank <= FULL_BOARD_MAX_RANK; rank += 1) {
       squares.push(`${file}${rank}`);
     }
   }
@@ -46,6 +66,8 @@ const difficultySelectEl = document.getElementById("difficultySelect");
 const customWrapEl = document.getElementById("customWrap");
 const customPiecesPanelEl = document.getElementById("customPiecesPanel");
 const customPieceCheckboxes = Array.from(document.querySelectorAll("#customPiecesPanel .piece-btn"));
+const boardViewportEl = document.getElementById("boardViewport");
+const variantBadgeEl = document.getElementById("variantBadge");
 
 const newPuzzleBtnEl = document.getElementById("newPuzzleBtn");
 const hintBtnEl = document.getElementById("hintBtn");
@@ -135,8 +157,18 @@ function startClocks() {
 function updateModeUI() {
   newPuzzleBtnEl.textContent = "New Puzzle";
   hintBtnEl.disabled = false;
-  customWrapEl.style.display = "block";
-  customPiecesPanelEl.hidden = false;
+  customWrapEl.style.display = currentDifficulty === "hard" ? "none" : "block";
+  customPiecesPanelEl.hidden = currentDifficulty === "hard";
+
+  if (variantBadgeEl) {
+    variantBadgeEl.textContent = currentDifficulty === "hard" ? "8x8 Variant" : "5x5 Variant";
+  }
+
+  if (boardViewportEl) {
+    boardViewportEl.classList.toggle("board-5x5", currentDifficulty !== "hard");
+    boardViewportEl.classList.toggle("board-8x8", currentDifficulty === "hard");
+    boardViewportEl.setAttribute("data-board-label", currentDifficulty === "hard" ? "8x8 Full Board" : "5x5 Tactical Board");
+  }
 }
 
 function updateStatusFields() {
@@ -160,6 +192,73 @@ function selectedCustomPieces() {
   return customPieceCheckboxes
     .filter((btn) => btn.classList.contains("selected"))
     .map((btn) => btn.getAttribute("data-piece"));
+}
+
+function randomInt(minInclusive, maxInclusive) {
+  return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
+}
+
+function randomHardPieces() {
+  const weightedPool = ["q", "r", "b", "n", "p", "p"];
+  const shuffled = [...weightedPool];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const pieceCount = randomInt(3, 4);
+  return shuffled.slice(0, pieceCount);
+}
+
+function randomHardDefenderPieces() {
+  const weightedPool = ["r", "b", "n", "p", "p"];
+  const shuffled = [...weightedPool];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  const pieceCount = randomInt(1, 2);
+  return shuffled.slice(0, pieceCount);
+}
+
+function formatPieceListForTitle(pieces) {
+  return pieces.map((piece) => PIECE_LABELS[piece] || piece.toUpperCase()).join(", ");
+}
+
+function isHardMode() {
+  return currentDifficulty === "hard";
+}
+
+function boardSquaresForMode() {
+  return isHardMode() ? FULL_BOARD_SQUARES : MINI_BOARD_SQUARES;
+}
+
+function isSquareOnActiveBoard(square) {
+  return isHardMode() ? isSquareOnFullBoard(square) : isSquareOnMiniBoard(square);
+}
+
+function legalMovesForMode(chess) {
+  if (isHardMode()) {
+    return chess.moves({ verbose: true }).filter((move) => {
+      const piece = chess.get(move.to);
+      return !(piece && piece.type === "k");
+    });
+  }
+  return legalMovesWithinMiniBoard(chess);
+}
+
+function terminalStateForMode(chess) {
+  if (isHardMode()) {
+    if (isCheckmate(chess)) return { kind: "checkmate", legalMoves: [] };
+    if (isDraw(chess)) return { kind: "draw", legalMoves: [] };
+    const moves = legalMovesForMode(chess);
+    if (moves.length === 0) {
+      return { kind: isCheck(chess) ? "checkmate" : "draw", legalMoves: moves };
+    }
+    return { kind: "none", legalMoves: moves };
+  }
+  return miniBoardTerminalState(chess);
 }
 
 
@@ -197,10 +296,10 @@ function isSquareOnFullBoard(square) {
   if (typeof square !== "string" || square.length < 2) return false;
   const file = square[0];
   const rank = squareRank(square);
-  return 'abcdefgh'.includes(file)
+  return FULL_BOARD_FILES.includes(file)
     && Number.isInteger(rank)
-    && rank >= 1
-    && rank <= 8;
+    && rank >= FULL_BOARD_MIN_RANK
+    && rank <= FULL_BOARD_MAX_RANK;
 }
 
 function moveOnMiniBoard(move) {
@@ -278,6 +377,17 @@ function findMiniBoardKingSquare(chess, color) {
   return null;
 }
 
+function findBoardKingSquare(chess, color) {
+  const scanSquares = isHardMode() ? FULL_BOARD_SQUARES : MINI_BOARD_SQUARES;
+  for (const square of scanSquares) {
+    const piece = chess.get(square);
+    if (piece && piece.type === "k" && piece.color === color) {
+      return square;
+    }
+  }
+  return null;
+}
+
 function isMiniBoardInCheck(chess, color = chess.turn()) {
   const kingSquare = findMiniBoardKingSquare(chess, color);
   if (!kingSquare) return false;
@@ -303,12 +413,14 @@ function miniBoardTerminalState(chess) {
   return { kind: "draw", legalMoves: moves };
 }
 
-function randomSquare(usedSquares, avoidPawnEdges = false) {
-  const choices = MINI_BOARD_SQUARES.filter((square) => {
+function randomSquare(usedSquares, avoidPawnEdges = false, squares = MINI_BOARD_SQUARES) {
+  const minPawnRank = squares === FULL_BOARD_SQUARES ? FULL_BOARD_MIN_RANK : MINI_BOARD_MIN_RANK;
+  const maxPawnRank = squares === FULL_BOARD_SQUARES ? FULL_BOARD_MAX_RANK : MINI_BOARD_MAX_RANK;
+  const choices = squares.filter((square) => {
     if (usedSquares.has(square)) return false;
     if (!avoidPawnEdges) return true;
     const rank = squareRank(square);
-    return rank !== MINI_BOARD_MIN_RANK && rank !== MINI_BOARD_MAX_RANK;
+    return rank !== minPawnRank && rank !== maxPawnRank;
   });
 
   if (choices.length > 0) {
@@ -345,19 +457,23 @@ function setPuzzleGenerationUI(disabled) {
 
 function createCustomPuzzleAsync(requestToken) {
   return new Promise((resolve) => {
-    const selected = selectedCustomPieces();
-    const nonKingPieces = selected.filter((piece) => piece !== "k");
+    const nonKingPieces = currentDifficulty === "hard"
+      ? randomHardPieces()
+      : selectedCustomPieces().filter((piece) => piece !== "k");
+    const defenderPieces = currentDifficulty === "hard" ? randomHardDefenderPieces() : [];
 
-    if (nonKingPieces.length === 0) {
-      setMessage("Select at least one attacking piece besides king.", "warn");
-      resolve(null);
-      return;
-    }
+    if (currentDifficulty !== "hard") {
+      if (nonKingPieces.length === 0) {
+        setMessage("Select at least one attacking piece besides king.", "warn");
+        resolve(null);
+        return;
+      }
 
-    if (nonKingPieces.length > 3) {
-      setMessage("Choose up to 3 attacking pieces for faster puzzle generation.", "warn");
-      resolve(null);
-      return;
+      if (nonKingPieces.length > 3) {
+        setMessage("Choose up to 3 attacking pieces for faster puzzle generation.", "warn");
+        resolve(null);
+        return;
+      }
     }
 
 
@@ -370,10 +486,10 @@ function createCustomPuzzleAsync(requestToken) {
 
     // Ensure minimum mate is at least 1 (not 0)
     const limits = currentDifficulty === "hard"
-      ? { minMate: 4, maxMate: 6 }
+      ? { minMate: 2, maxMate: 4 }
       : { minMate: 1, maxMate: 3 };
 
-    const maxAttempts = 240;
+    const maxAttempts = currentDifficulty === "hard" ? 1400 : 240;
     const chunkSize = 6;
     let attempt = 0;
     let lastMessageTime = 0;
@@ -396,16 +512,17 @@ function createCustomPuzzleAsync(requestToken) {
 
         const testGame = new Chess();
         testGame.clear();
+        const generationSquares = boardSquaresForMode();
 
         const occupied = new Set();
-        const blackKingSquare = randomSquare(occupied, false);
+        const blackKingSquare = randomSquare(occupied, false, generationSquares);
         if (!blackKingSquare) continue;
         testGame.put({ type: "k", color: "b" }, blackKingSquare);
         occupied.add(blackKingSquare);
 
         let whiteKingSquare = null;
         for (let kingTry = 0; kingTry < 80; kingTry += 1) {
-          const candidate = randomSquare(occupied, false);
+          const candidate = randomSquare(occupied, false, generationSquares);
           if (!candidate || areAdjacent(candidate, blackKingSquare)) continue;
           whiteKingSquare = candidate;
           break;
@@ -417,7 +534,7 @@ function createCustomPuzzleAsync(requestToken) {
 
         let placedAll = true;
         for (const piece of nonKingPieces) {
-          const square = randomSquare(occupied, piece === "p");
+          const square = randomSquare(occupied, piece === "p", generationSquares);
           if (!square) {
             placedAll = false;
             break;
@@ -427,25 +544,48 @@ function createCustomPuzzleAsync(requestToken) {
         }
         if (!placedAll) continue;
 
-        // Ensure white is not in check at the start
-        if (isMiniBoardInCheck(testGame, "w")) continue;
+        for (const piece of defenderPieces) {
+          const square = randomSquare(occupied, piece === "p", generationSquares);
+          if (!square) {
+            placedAll = false;
+            break;
+          }
+          testGame.put({ type: piece, color: "b" }, square);
+          occupied.add(square);
+        }
+        if (!placedAll) continue;
+
+        // Start from a neutral position: neither side should already be in check.
+        if (isHardMode()) {
+          if (isColorInCheck(testGame, "w") || isColorInCheck(testGame, "b")) continue;
+        } else {
+          if (isMiniBoardInCheck(testGame, "w") || isMiniBoardInCheck(testGame, "b")) continue;
+        }
 
         // Skip if already checkmate or draw
-        const terminal = miniBoardTerminalState(testGame);
+        const terminal = terminalStateForMode(testGame);
         if (terminal.kind !== "none") continue;
 
-        const solved = MateSolver.findExactMateDistance(testGame, limits.maxMate, "w", {
-          timeLimitMs: 90,
-          moveFilter: moveOnMiniBoard,
-          isInCheck: (searchChess, sideToCheck) => isMiniBoardInCheck(searchChess, sideToCheck)
-        });
+        const solveOptions = {
+          timeLimitMs: currentDifficulty === "hard" ? 220 : 90,
+          isInCheck: (searchChess, sideToCheck) => isHardMode()
+            ? isColorInCheck(searchChess, sideToCheck)
+            : isMiniBoardInCheck(searchChess, sideToCheck)
+        };
+        if (!isHardMode()) {
+          solveOptions.moveFilter = moveOnMiniBoard;
+        }
+
+        const solved = MateSolver.findExactMateDistance(testGame, limits.maxMate, "w", solveOptions);
         if (solved.timedOut) continue;
         // Only accept if mateIn is at least 1 (not 0), and not already checkmate
         if (!solved.solved || solved.mateIn < limits.minMate || solved.mateIn > limits.maxMate || solved.mateIn === 0) continue;
 
         resolve({
           id: `custom-${Date.now()}`,
-          title: "Custom Piece Puzzle",
+          title: currentDifficulty === "hard"
+            ? `Hard Random Puzzle (W: ${formatPieceListForTitle(nonKingPieces)} | B: ${formatPieceListForTitle(defenderPieces)})`
+            : "Custom Piece Puzzle",
           fen: testGame.fen(),
           mateIn: solved.mateIn,
           difficulty: currentDifficulty
@@ -454,8 +594,12 @@ function createCustomPuzzleAsync(requestToken) {
       }
 
       if (attempt >= maxAttempts) {
-        // Puzzle generation failed - suggest better piece combinations
-        resolve({ failed: true, suggestion: "Try adding more attacking pieces or changing piece combinations." });
+        resolve({
+          failed: true,
+          suggestion: currentDifficulty === "hard"
+            ? "Could not find a hard puzzle this run. Please click New Puzzle again."
+            : "Try adding more attacking pieces or changing piece combinations."
+        });
         return;
       }
 
@@ -477,7 +621,7 @@ function pieceValue(type) {
 }
 
 function evaluatePosition(chess, color) {
-  const terminal = miniBoardTerminalState(chess);
+  const terminal = terminalStateForMode(chess);
   if (terminal.kind === "checkmate" || isCheckmate(chess)) {
     return chess.turn() === color ? -999999 : 999999;
   }
@@ -501,7 +645,7 @@ function evaluatePosition(chess, color) {
 }
 
 function minimax(chess, depth, alpha, beta, maximizing, aiSide) {
-  const terminal = miniBoardTerminalState(chess);
+  const terminal = terminalStateForMode(chess);
   if (depth === 0 || terminal.kind !== "none" || isCheckmate(chess) || isDraw(chess)) {
     return evaluatePosition(chess, aiSide);
   }
@@ -539,12 +683,7 @@ function aiDepth() {
 }
 
 function bestMoveFor(chess, side, depth) {
-  const moves = legalMovesWithinMiniBoard(chess)
-    .filter(move => {
-      // Exclude any moves that would capture the opponent's king (illegal in chess)
-      const piece = chess.get(move.to);
-      return !(piece && piece.type === "k");
-    });
+  const moves = legalMovesForMode(chess);
   if (moves.length === 0) return null;
 
   let bestMove = moves[0];
@@ -569,13 +708,13 @@ function renderResult(summary, detailsText = "") {
 }
 
 function finalizeGameIfNeeded() {
-  const terminal = miniBoardTerminalState(game);
+  const terminal = terminalStateForMode(game);
   if (terminal.kind === "checkmate" || isCheckmate(game)) {
     stopAllTimers();
 
     const success = game.turn() === defenderColor;
     if (success) {
-      setMessage("Checkmate found on the 5x5 board.", "good");
+      setMessage(isHardMode() ? "Checkmate found on the 8x8 board." : "Checkmate found on the 5x5 board.", "good");
       const finalScore = calculateCurrentScore();
       if (optimalMoves) {
         renderResult(
@@ -671,7 +810,9 @@ function applyPuzzle(puzzle) {
   // Update board note based on difficulty
   const boardNoteEl = document.querySelector('.board-note');
   if (boardNoteEl) {
-    boardNoteEl.textContent = currentDifficulty === "hard" ? "Drag and drop pieces on the 8x8 board. Only legal moves are accepted." : "Drag and drop pieces on the 5x5 board. Only legal moves are accepted.";
+    boardNoteEl.textContent = currentDifficulty === "hard"
+      ? "Drag and drop pieces on the 8x8 board. Hard mode uses random attacker pieces."
+      : "Drag and drop pieces on the 5x5 board. Only legal moves are accepted.";
   }
 }
 
@@ -714,14 +855,14 @@ function resetCurrent() {
 }
 
 function onDragStart(source, piece) {
-  if (isGeneratingPuzzle || !game || miniBoardTerminalState(game).kind !== "none" || isCheckmate(game) || isDraw(game)) return false;
+  if (isGeneratingPuzzle || !game || terminalStateForMode(game).kind !== "none" || isCheckmate(game) || isDraw(game)) return false;
 
   if (game.turn() !== attackerColor) return false;
   if (piece[0] !== attackerColor) return false;
-  if (!isSquareOnMiniBoard(source)) return false;
+  if (!isSquareOnActiveBoard(source)) return false;
 
   // Highlight possible moves when dragging starts
-  const moves = game.moves({ verbose: true }).filter(move => move.from === source && moveOnMiniBoard(move));
+  const moves = legalMovesForMode(game).filter(move => move.from === source);
   moves.forEach(move => {
     const isCapture = move.captured !== undefined;
     highlightSquare(move.to, isCapture);
@@ -735,7 +876,7 @@ function onDragStart(source, piece) {
 
 function onDrop(source, target) {
   if (!game) return "snapback";
-  if (!isSquareOnMiniBoard(source) || !isSquareOnMiniBoard(target)) return "snapback";
+  if (!isSquareOnActiveBoard(source) || !isSquareOnActiveBoard(target)) return "snapback";
 
   // Check if target square has opponent's king - illegal move in real chess
   const targetPiece = game.get(target);
@@ -747,7 +888,7 @@ function onDrop(source, target) {
 
   const move = game.move({ from: source, to: target, promotion: "q" });
   if (move === null) return "snapback";
-  if (!moveOnMiniBoard(move)) {
+  if (!isHardMode() && !moveOnMiniBoard(move)) {
     game.undo();
     return "snapback";
   }
@@ -778,7 +919,7 @@ function onMouseoverSquare(square, piece) {
   if (!game || !piece || game.turn() !== attackerColor || piece[0] !== attackerColor || isGeneratingPuzzle) return;
 
   // Get all possible moves for this piece
-  const moves = game.moves({ verbose: true }).filter(move => move.from === square && moveOnMiniBoard(move));
+  const moves = legalMovesForMode(game).filter(move => move.from === square);
   
   // Highlight the target squares
   moves.forEach(move => {
@@ -813,7 +954,7 @@ function updateCheckHighlighting() {
 
   // Check if white is in check
   if (isColorInCheck(game, 'w')) {
-    const whiteKingSquare = findMiniBoardKingSquare(game, 'w');
+    const whiteKingSquare = findBoardKingSquare(game, 'w');
     if (whiteKingSquare) {
       const $kingSquare = $(`.square-55d63[data-square="${whiteKingSquare}"]`);
       $kingSquare.addClass('king-in-check');
@@ -822,7 +963,7 @@ function updateCheckHighlighting() {
 
   // Check if black is in check
   if (isColorInCheck(game, 'b')) {
-    const blackKingSquare = findMiniBoardKingSquare(game, 'b');
+    const blackKingSquare = findBoardKingSquare(game, 'b');
     if (blackKingSquare) {
       const $kingSquare = $(`.square-55d63[data-square="${blackKingSquare}"]`);
       $kingSquare.addClass('king-in-check');
@@ -841,18 +982,23 @@ function findSolverHintMove(chess, side) {
   }
 
   const maxMoves = currentDifficulty === "hard" ? 6 : 3;
-  const solved = MateSolver.findExactMateDistance(chess, maxMoves, side, {
-    timeLimitMs: 150,
-    moveFilter: moveOnMiniBoard,
-    isInCheck: (searchChess, sideToCheck) => isMiniBoardInCheck(searchChess, sideToCheck)
-  });
+  const solveOptions = {
+    timeLimitMs: isHardMode() ? 220 : 150,
+    isInCheck: (searchChess, sideToCheck) => isHardMode()
+      ? isColorInCheck(searchChess, sideToCheck)
+      : isMiniBoardInCheck(searchChess, sideToCheck)
+  };
+  if (!isHardMode()) {
+    solveOptions.moveFilter = moveOnMiniBoard;
+  }
+  const solved = MateSolver.findExactMateDistance(chess, maxMoves, side, solveOptions);
 
   if (!solved.solved || solved.principalVariation.length === 0) {
     return null;
   }
 
   const pvFirst = solved.principalVariation[0];
-  const legalMoves = legalMovesWithinMiniBoard(chess);
+  const legalMoves = legalMovesForMode(chess);
   const exactSan = legalMoves.find((move) => move.san === pvFirst);
   if (exactSan) return exactSan;
 
@@ -901,27 +1047,13 @@ resetBtnEl.addEventListener("click", resetCurrent);
 
 difficultySelectEl.addEventListener("change", (event) => {
   currentDifficulty = event.target.value;
-  if (currentDifficulty === "hard") {
-    customWrapEl.style.display = "none";
-    // Select all pieces for hard
-    customPieceCheckboxes.forEach(btn => {
-      if (btn.getAttribute("data-piece") !== "k") {
-        btn.classList.add("selected");
-      }
-    });
-  } else {
-    customWrapEl.style.display = "block";
-    // For easy/medium, deselect all except king
+  if (currentDifficulty !== "hard") {
+    // For easy mode, deselect all except king
     customPieceCheckboxes.forEach(btn => {
       if (btn.getAttribute("data-piece") !== "k") {
         btn.classList.remove("selected");
       }
     });
-  }
-  if (currentDifficulty === "medium") {
-    hintBtnEl.disabled = true;
-  } else {
-    hintBtnEl.disabled = false;
   }
   startAccordingToMode();
 });
