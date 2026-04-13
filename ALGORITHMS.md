@@ -312,8 +312,6 @@ createCustomPuzzleAsync(requestToken):
 |-----------|------|-------|----------|
 | Forced-Mate (ID + Memo) | O(d × s) | O(s) | Puzzle verification |
 | Minimax (Alpha-Beta) | O(b^(d/2)) | O(d) | AI defense moves |
-| Position Evaluation | O(n) | O(1) | Scoring leaf nodes |
-| Async Generator | O(a × b^d) | O(c) | Puzzle generation |
 
 Where:
 - d = search depth
